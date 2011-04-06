@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script type="text/javascript" src="citra.js"></script>
+    </head>
+    <body>
+        <canvas id="display"></canvas>
+        <script type="text/javascript">
+            CV({"i1":"sotoayam.png"},function(){
+                //COV.clear()
+                //alert('ya')
+                //COV.transform.grey(COV.images.i1)
+                var i1 = CV.images.i1;
+                //var i2 = COV.transform.scale(i1,"i2",i1.width*2,i1.height*2);
+                var i2 = CV.transform.rotate(i1,"i2",Math.PI/8);
+                //COV.transform.treshold(i2)
+                CV.display(i2);
+            }, 'display')
+            
+        </script>
+    </body>
+</html>
