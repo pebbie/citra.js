@@ -38,34 +38,34 @@ $.load = function(url, callback)
 
 CV.transform = {
     //inplace grey
-    grey:function(imd){
+    grey:function(imd,dimd){
         for(y=0; y<imd.height; ++y){
-            for(x=0; x<imd.width; ++x){
-                p = (y*imd.width+x)*4;
+            var p = y*imd.width*4;
+            for(x=0; x<imd.width; ++x, p+=4){
                 r = imd.data[p]
                 g = imd.data[p+1]
                 b = imd.data[p+2]
                 gv = (.299 * r+ .587 * g+.114 * b)
-                imd.data[p] = gv;
-                imd.data[p+1] = gv;
-                imd.data[p+2] = gv;
+                dimd.data[p] = gv;
+                dimd.data[p+1] = gv;
+                dimd.data[p+2] = gv;
             }
         }
     },
     //inplace threshold
-    treshold:function(imd, tvalue, range){
+    treshold:function(imd, dimd, tvalue, range){
         tvalue = tvalue || 128;
         range = range || [0,255]
         for(y=0; y<imd.height; ++y){
-            for(x=0; x<imd.width; ++x){
-                p = (y*imd.width+x)*4;
+            var p = y*imd.width*4;
+            for(x=0; x<imd.width; ++x, p+=4){
                 r = imd.data[p]
                 g = imd.data[p+1]
                 b = imd.data[p+2]
                 gv = (.299 * r+ .587 * g+.114 * b)>tvalue?range[1]:range[0];
-                imd.data[p] = gv;
-                imd.data[p+1] = gv;
-                imd.data[p+2] = gv;
+                dimd.data[p] = gv;
+                dimd.data[p+1] = gv;
+                dimd.data[p+2] = gv;
             }
         }
     },
@@ -128,6 +128,61 @@ CV.clone = function(oldid,newid){
     c.height = CV.images[oldid].height;
     c.putImageData(CV.images[oldid],0,0);
     CV.images[newid] = c.getImageData(0,0,c.width,c.height);
+};
+
+CV.filter = {
+    //inplace integral image blur
+    blur:function(imd, dimd, width){
+        var width = width || 3;
+        var integral = new Array();
+        for(var i=0; i<imd.data.length; ++i)integral[i] = 0;
+        for(var x=0; x<imd.width; ++x){
+            var p = x*4;
+            integral[p] = imd.data[p]
+            integral[p+1] = imd.data[p+1]
+            integral[p+2] = imd.data[p+2]
+            integral[p+3] = imd.data[p+3]
+        }
+        
+        var stride = imd.width*4;
+        for(var y=1; y<imd.height; ++y){
+            var p = y*stride;
+            integral[p] = imd.data[p]+imd.data[p-stride]
+            integral[p+1] = imd.data[p+1]+imd.data[p-stride+1]
+            integral[p+2] = imd.data[p+2]+imd.data[p-stride+2]
+            integral[p+3] = imd.data[p+3]+imd.data[p-stride+3]
+        }
+        var p = stride+4;
+        for(var y=1; y<imd.height; ++y, p+=4){
+            for(var x=1; x<imd.width; ++x, p+=4){
+                integral[p] = imd.data[p]+integral[p-4]+integral[p-stride]-integral[p-stride-4];
+                integral[p+1] = imd.data[p+1]+integral[p-3]+integral[p-stride+1]-integral[p-stride-3];
+                integral[p+2] = imd.data[p+2]+integral[p-2]+integral[p-stride+2]-integral[p-stride-2];
+                integral[p+3] = imd.data[p+3]+integral[p-1]+integral[p-stride+3]-integral[p-stride-1];
+            }
+        }
+        var midw = Math.round(width/2);
+        for(var y=0; y<imd.height; ++y){
+            var p = y*stride;
+            for(var x=0; x<imd.width; ++x, p+=4){
+                var l = Math.max(0, x-midw);
+                var r = Math.min(x+midw,imd.width-1);
+                var t = Math.max(0, y-midw);
+                var b = Math.min(y+midw, imd.height-1);
+                var n = (r-l+1)*(b-t+1);
+                var bs = b*stride;
+                var ts = t*stride;
+                var br = bs+r*4;
+                var tl = ts+l*4;
+                var bl = bs+l*4;
+                var tr = ts+r*4;
+                dimd.data[p] = (integral[br]+integral[tl]-integral[bl]-integral[tr])/n;
+                dimd.data[p+1] = (integral[br+1]+integral[tl+1]-integral[bl+1]-integral[tr+1])/n;
+                dimd.data[p+2] = (integral[br+2]+integral[tl+2]-integral[bl+2]-integral[tr+2])/n;
+                dimd.data[p+3] = (integral[br+3]+integral[tl+3]-integral[bl+3]-integral[tr+3])/n;
+            }
+        }
+    }
 };
 
 }());
