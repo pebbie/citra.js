@@ -362,6 +362,16 @@ CV.filter = {
                 dimd.data[p+2] = gv;
             }
         }
+    },
+    negative:function(imd,dimd){
+        for(y=0; y<imd.height; ++y){
+            var p = y*imd.width*4;
+            for(x=0; x<imd.width; ++x, p+=4){
+                dimd.data[p] = 255 - imd.data[p];
+                dimd.data[p+1] = 255 - imd.data[p+1];
+                dimd.data[p+2] = 255 - imd.data[p+2];
+            }
+        }
     }
 };
 
