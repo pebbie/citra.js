@@ -41,6 +41,10 @@ $.load = function(url, id, callback)
     img.src = url;
 }
 
+$.clamp = function(value,min,max){
+    return Math.max(min,Math.min(max,value));
+}
+
 CV.transform = {
     grey:function(imd, dimd){
         for(y=0; y<imd.height; ++y){
@@ -50,22 +54,6 @@ CV.transform = {
                 g = imd.data[p+1]
                 b = imd.data[p+2]
                 gv = (.299 * r+ .587 * g+.114 * b)
-                dimd.data[p] = gv;
-                dimd.data[p+1] = gv;
-                dimd.data[p+2] = gv;
-            }
-        }
-    },
-    treshold:function(imd, dimd, tvalue, range){
-        tvalue = tvalue || 128;
-        range = range || [0,255]
-        for(y=0; y<imd.height; ++y){
-            var p = y*imd.width*4;
-            for(x=0; x<imd.width; ++x, p+=4){
-                r = imd.data[p]
-                g = imd.data[p+1]
-                b = imd.data[p+2]
-                gv = (.299 * r+ .587 * g+.114 * b)>tvalue?range[1]:range[0];
                 dimd.data[p] = gv;
                 dimd.data[p+1] = gv;
                 dimd.data[p+2] = gv;
@@ -116,8 +104,11 @@ CV.display = function(image,context){
     context.putImageData(image,0,0);
 }
 
-CV.create = function(id,width,height){
-    CV.images[id] = CV.context.createImageData(width,height);
+CV.create = function(width,height){
+    if(typeof(arguments[0])=="Number")
+        return CV.context.createImageData(width,height);
+    else
+        return CV.context.createImageData(width.width,width.height);
 };
 
 CV.clone = function(oldimage){
@@ -132,14 +123,62 @@ CV.register = function(imdata, id){
     if(!CV.images[id])CV.images[id] = imdata;
 }
 
+CV.operator = {
+    add:function(imd1,imd2,dimd){
+        if(imd1.width==imd2.width && imd1.height==imd2.height){
+            for(w = 0; w<imd1.data.length; ++w)
+                dimd.data[w] = imd1.data[w]+imd2.data[w];
+        }else{
+            var stride1 = imd1.width*4;
+            var stride2 = imd2.width*4;
+            var dstride = dimd.width*4;
+            var minw = Math.min(imd1.width, imd2.width, dimd.width);
+            var minh = Math.min(imd1.height, imd2.height, dimd.height);
+            for(var y=0; y<minh; ++y){
+                for(var x=0; x<minw; ++x){
+                    var dp = y*dstride+x*4;
+                    var p1 = y*stride1+x*4;
+                    var p2 = y*stride2+x*4;
+                    dimd.data[dp] = imd1.data[p1]+imd2.data[p2];
+                    dimd.data[dp+1] = imd1.data[p1+1]+imd2.data[p2+1];
+                    dimd.data[dp+2] = imd1.data[p1+2]+imd2.data[p2+2];
+                }
+            }
+        }
+    },
+    absDiff:function(imd1,imd2,dimd){
+        if(imd1.width==imd2.width && imd1.height==imd2.height && imd1.width==dimd.width && imd1.height == dimd.height){
+            for(w = 0; w<imd1.data.length; ++w){
+                if(w%4!=3)
+                    dimd.data[w] = Math.abs(imd1.data[w]-imd2.data[w]);
+            }
+        }else{
+            var stride1 = imd1.width*4;
+            var stride2 = imd2.width*4;
+            var dstride = dimd.width*4;
+            var minw = Math.min(imd1.width, imd2.width, dimd.width);
+            var minh = Math.min(imd1.height, imd2.height, dimd.height);
+            for(var y=0; y<minh; ++y){
+                for(var x=0; x<minw; ++x){
+                    var dp = y*dstride+x*4;
+                    var p1 = y*stride1+x*4;
+                    var p2 = y*stride2+x*4;
+                    dimd.data[dp] = Math.abs(imd1.data[p1]-imd2.data[p2]);
+                    dimd.data[dp+1] = Math.abs(imd1.data[p1+1]-imd2.data[p2+1]);
+                    dimd.data[dp+2] = Math.abs(imd1.data[p1+2]-imd2.data[p2+2]);
+                }
+            }
+        }
+    }
+}
+
 CV.filter = {
-    //inplace integral image blur
+    // image blur using integral image
     blur:function(imd, dimd, width){
         var width = width || 3;
         var integral = new Array();
         for(var i=0; i<imd.data.length; ++i)integral[i] = 0;
         for(var i=0; i<4; ++i)integral[i] = imd.data[i];
-        
         
         /* top side */
         for(var x=1,p=4; x<imd.width; ++x, p+=4){
@@ -234,7 +273,7 @@ CV.filter = {
             for(var x=0, px=0; x<imd.width; ++x, px+=4){
                 var sumr = 0.0, sumg = 0.0, sumb = 0.0, suma = 0.0;
                 var sumc = 0.0;
-                for(dx=-mid; dx<mid; ++dx){
+                for(dx=-mid; dx<=mid; ++dx){
                     if (x+dx<0 || x+dx>=imd.width) continue;
                     sumr += imd.data[p+px+dx*4]*kernel[dx+mid];
                     sumg += imd.data[p+px+dx*4+1]*kernel[dx+mid];
@@ -256,23 +295,110 @@ CV.filter = {
             for(var y=0, p=0; y<imd.height; ++y, p+=stride){
                 var sumr = 0.0, sumg = 0.0, sumb = 0.0, suma = 0.0;
                 var sumc = 0.0;
-                for(dy=-mid; dy<mid; ++dy){
+                var pd = p+px;
+                for(dy=-mid; dy<=mid; ++dy){
                     if (y+dy<0 || y+dy>=imd.height) continue;
                     var py = dy * stride;
-                    sumr += imd.data[p+px+py]*kernel[dy+mid];
-                    sumg += imd.data[p+px+py+1]*kernel[dy+mid];
-                    sumb += imd.data[p+px+py+2]*kernel[dy+mid];
-                    suma += imd.data[p+px+py+3]*kernel[dy+mid];
-                    sumc += kernel[dy+mid];
+                    var pp = pd+py, ki = dy+mid;
+                    sumr += imd.data[pp]*kernel[ki];
+                    sumg += imd.data[pp+1]*kernel[ki];
+                    sumb += imd.data[pp+2]*kernel[ki];
+                    suma += imd.data[pp+3]*kernel[ki];
+                    sumc += kernel[ki];
                 }
-                imd.data[p+px] = sumr / sumc;
-                imd.data[p+px+1] = sumg / sumc;
-                imd.data[p+px+2] = sumb / sumc;
-                imd.data[p+px+3] = suma / sumc;
+                imd.data[pd] = sumr / sumc;
+                imd.data[pd+1] = sumg / sumc;
+                imd.data[pd+2] = sumb / sumc;
+                imd.data[pd+3] = suma / sumc;
             }
         }
         
+    },
+    median:function(imd,dimd,width){
+        var width = width || 3;
+        var stride = imd.width*4;
+        var mid = Math.floor(width/2);
+        
+        var p = 0;
+        for(var y=0; y<imd.height; ++y){
+            for(var x=0; x<imd.width; ++x, p+=4){
+            
+                var rb = new Array(), gb = new Array(), bb = new Array();
+                for(dy=-mid; dy<=mid; ++dy){
+                    if (y+dy<0 || y+dy>=imd.height) continue;
+                    var oy = dy * stride;
+                    for(dx=-mid; dx<=mid; ++dx){
+                        if (x+dx<0 || x+dx>=imd.width) continue;
+                        var ox = dx * 4;
+                        
+                        pp = p+oy+ox;
+                        rb[rb.length] = imd.data[pp];
+                        gb[gb.length] = imd.data[pp+1];
+                        bb[bb.length] = imd.data[pp+2];
+                    }
+                }
+                rb.sort();
+                gb.sort();
+                bb.sort();
+                bmid = Math.floor(rb.length/2)+1;
+                dimd.data[p] = rb[bmid];
+                dimd.data[p+1] = gb[bmid];
+                dimd.data[p+2] = bb[bmid];
+            }
+        }
+    },
+    treshold:function(imd, dimd, tvalue, range){
+        tvalue = tvalue || 128;
+        range = range || [0,255]
+        for(y=0; y<imd.height; ++y){
+            var p = y*imd.width*4;
+            for(x=0; x<imd.width; ++x, p+=4){
+                r = imd.data[p]
+                g = imd.data[p+1]
+                b = imd.data[p+2]
+                gv = (.299 * r+ .587 * g+.114 * b)>tvalue?range[1]:range[0];
+                dimd.data[p] = gv;
+                dimd.data[p+1] = gv;
+                dimd.data[p+2] = gv;
+            }
+        }
+    }
+};
+
+(function(){
+
+function Histogram(numbin){
+    this.bins = new Array();
+    this.ndata = 0;
+    for(var i=0; i<numbin; ++i) bins[i] = 0;
+}
+
+Histogram.prototype = {
+    addItem:function (bvalue){
+        bins[bvalue] += 1;
+        this.ndata ++;
+    },
+    toPdf:function(){
+        var pdf = new Array();
+        for(var i=0; i<this.bins.length; ++i)pdf[i] = this.bins[i] / ndata;
+        return pdf;
+    },
+    toAccum:function(){
+        var acc = new Array();
+        for(var i=0,accum=0; i<this.bins.length; ++i){
+            accum += this.bins[i]
+            acc[i] = accum;
+        }
+        return acc;
+    },
+    toCdf:function(){
+        var cdf = new Array();
+        for(var i=0,accum=0; i<this.bins.length; ++i,accum+=this.bins[i])cdf[i] = (accum+this.bins[i])/ndata;
+        return cdf;
     }
 };
 
 }());
+
+}());
+

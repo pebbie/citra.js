@@ -8,12 +8,17 @@
         <script type="text/javascript">
             CV({"a1":"sotoayam.png"},function(){
                 var i1 = CV.images.a1;
+                
                 //var i2 = CV.transform.scale(i1,i1.width*2,i1.height*2);
                 var i3 = CV.transform.rotate(i1,Math.PI/8);
-                //var i4 = CV.clone(i1)
+                var i4 = CV.clone(i3)
+                
                 //CV.transform.grey(i1, i1);
-                //CV.filter.blur(i3, i3,3);
-                CV.filter.gaussianBlur(i3, i3, 1.0);
+                //CV.filter.blur(i3,i3,5);
+                CV.filter.gaussianBlur(i3, i3, 1.5);
+                var i4 = CV.operator.absDiff(i4,i3,i3);
+                
+                //CV.filter.median(i4,i3,3);
                 CV.display(i3);
             }, 'display')
         </script>
