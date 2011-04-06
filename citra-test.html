@@ -6,15 +6,16 @@
     <body>
         <canvas id="display"></canvas>
         <script type="text/javascript">
-            CV({"i1":"sotoayam.png"},function(){
-                var i1 = CV.images.i1;
-                var i2 = CV.transform.scale(i1,"i2",i1.width*2,i1.height*2);
-                var i3 = CV.transform.rotate(i2,"i3",Math.PI/8);
-                CV.transform.grey(i3, i3);
-                CV.filter.blur(i3, i3, 33);
+            CV({"a1":"sotoayam.png"},function(){
+                var i1 = CV.images.a1;
+                //var i2 = CV.transform.scale(i1,i1.width*2,i1.height*2);
+                var i3 = CV.transform.rotate(i1,Math.PI/8);
+                //var i4 = CV.clone(i1)
+                //CV.transform.grey(i1, i1);
+                //CV.filter.blur(i3, i3,3);
+                CV.filter.gaussianBlur(i3, i3, 1.0);
                 CV.display(i3);
             }, 'display')
-            
         </script>
     </body>
 </html>
